@@ -2,25 +2,20 @@
 
 from IPython import embed  # For debugging; put `embed()` anywhere
 from llama_cpp import Llama
-import json
 import sys
-
-import numpy as np
-import numpy.typing as npt
 
 from llama_cpp._internals import _LlamaTokenDataArray
 
+def debug(*args, **kwargs):
+    print(*args, **kwargs, file=sys.stderr)
+
 llm = Llama.from_pretrained(
-    # repo_id="Qwen/Qwen1.5-0.5B-Chat-GGUF",
-    # filename="*q8_0.gguf",
     repo_id="TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
     filename="*Q8_0.gguf",
-    logits_all=True,
-    verbose=True,
+    verbose=False,
+    # logits_all=True,
 )
 
-# or "str".encode("utf-8")
-# prompt = b"Q: Give a comma separated list of the planets in the solar system? A: "
 prompt = "Q: Give a comma separated list of the planets in the solar system? A: ".encode("utf-8")
 
 tokens = list(llm.tokenize(prompt))
@@ -36,15 +31,8 @@ def generate_nth(tokens, nth):
     token_data_array.copy_logits(logits)
     ctx_main.sample_softmax(token_data_array)
     nth_token = token_data_array.candidates_data[0][nth][0]
-    # print(f"  {nth}: {llm.detokenize([nth_token])}")
     return { 'n': nth, 'token': nth_token, 'text': llm.detokenize([nth_token]).decode("utf-8"), 'children': [] }
 
-# tree = [
-# { n: 0, token: 2323, children: [ { n: 0, token: 232, children: [] }, { 
-# ] },
-# { n: 1, token: 2323, children: [] },
-# { n: 2, token: 2323, children: [] },
-# ]
 
 def generate_sequence(tokens, length):
     local_tokens = tokens.copy()
@@ -60,19 +48,19 @@ def generate_tree(tokens, breadth: int, depth: int, continuation: int, path = "n
     for i in range(breadth):
         node_path = f"{path}_{i}"
         node = generate_nth(tokens, i)
-        print(f"  {path} -> {node}")
+        debug(f"  {path} -> {node}")
         if depth == 0:
             node["continuation"] = generate_sequence(tokens + [node["token"]], continuation)
             node["continuation_text"] = llm.detokenize(node["continuation"]).decode("utf-8")
-            print(f"  {path} -> {node} -> {node['continuation_text']}")
+            debug(f"  {path} -> {node} -> {node['continuation_text']}")
         else:
             node["children"] = generate_tree(tokens + [node["token"]], breadth, depth - 1, continuation, node_path)
         result.append(node)
     return result
 
 llm.eval(tokens) # Seed the whole thing
-tree = generate_tree(tokens, 2, 0, 5)
-print(tree)
+tree = generate_tree(tokens, 2, 2, 5)
+debug(tree)
 
 def node_to_graphviz(node, nth, depth, path = "n"):
     path = f"{path}_{nth}"
@@ -100,28 +88,4 @@ def tree_to_graphviz(prefix_tokens, tree):
     return graphviz
 
 print(tree_to_graphviz(tokens, tree))
-
-# for _ in range(10):
-#     llm.eval(tokens)
-#     # logits: npt.NDArray[np.single] = llm._scores[-1, :]
-#     logits = llm._scores[-1, :]
-#     token_data_array = _LlamaTokenDataArray(n_vocab=n_vocab)
-#     token_data_array.copy_logits(logits)
-# 
-#     # This implicitly sorts!
-#     ctx_main.sample_top_k(token_data_array, 10, min_keep=1)
-# 
-#     print(f"Top {token_data_array.candidates.size} tokens:")
-#     for n in range(token_data_array.candidates.size):
-#         nth_token = token_data_array.candidates_data[0][n][0]
-#         print(f"  {n}: {llm.detokenize([nth_token])}")
-# 
-#     selected_token = token_data_array.candidates_data[0][0][0]
-#     tokens.append(selected_token)
-# 
-#     print(f"Result: {llm.detokenize(tokens)}")
-
-# embed()
-
-# selected_token = llm.sample
 
