@@ -82,7 +82,8 @@ def node_to_graphviz(node, nth, depth, path = "n"):
         graphviz += f"  {path} -> {child_path};\n"
         graphviz += node_to_graphviz(child, n, depth+1, path)
     if "continuation_text" in node:
-        graphviz += f"  {path} -> \"{node['continuation_text']}\";\n"
+        graphviz += f"  {path} -> {path}_continuation;\n"
+        graphviz += f"  {path}_continuation [label=\"{node['continuation_text']}\"];\n"
     return graphviz
 
 def tree_to_graphviz(prefix_tokens, tree):
