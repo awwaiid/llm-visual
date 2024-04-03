@@ -4,4 +4,5 @@ Initially I'm doing this with a localLLM, but it is already getting annoyingly s
 
 WIP Example Outputs
 
-![](img/example-1.png)
+![Example 1](img/example-1.png)
+![Example 2](img/example-2.png)
