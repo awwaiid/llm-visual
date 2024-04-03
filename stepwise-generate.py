@@ -29,10 +29,9 @@ ctx_main = llm._ctx
 n_vocab = ctx_main.model.n_vocab()
 
 def generate_nth(tokens, nth):
-    llm.reset()
-    llm.eval(tokens)
-    logits: npt.NDArray[np.single] = llm._scores[-1, :]
-    # logits = llm._scores[-1, :]
+    llm.n_tokens = len(tokens) - 1
+    llm.eval([tokens[-1]])
+    logits = llm._scores[-1, :]
     token_data_array = _LlamaTokenDataArray(n_vocab=n_vocab)
     token_data_array.copy_logits(logits)
     ctx_main.sample_softmax(token_data_array)
@@ -71,7 +70,8 @@ def generate_tree(tokens, breadth: int, depth: int, continuation: int, path = "n
         result.append(node)
     return result
 
-tree = generate_tree(tokens, 3, 2, 5)
+llm.eval(tokens) # Seed the whole thing
+tree = generate_tree(tokens, 2, 0, 5)
 print(tree)
 
 def node_to_graphviz(node, nth, depth, path = "n"):
