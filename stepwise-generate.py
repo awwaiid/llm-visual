@@ -37,8 +37,8 @@ def generate_nth(tokens, nth):
     token_data_array.copy_logits(logits)
     ctx_main.sample_softmax(token_data_array)
     nth_token = token_data_array.candidates_data[0][nth][0]
-    print(f"  {nth}: {llm.detokenize([nth_token])}")
-    return { 'n': nth, 'token': nth_token, 'text': llm.detokenize([nth_token]), 'children': [] }
+    # print(f"  {nth}: {llm.detokenize([nth_token])}")
+    return { 'n': nth, 'token': nth_token, 'text': llm.detokenize([nth_token]).decode("utf-8"), 'children': [] }
 
 # tree = [
 # { n: 0, token: 2323, children: [ { n: 0, token: 232, children: [] }, { 
@@ -56,30 +56,33 @@ def generate_sequence(tokens, length):
         output_tokens.append(token)
     return output_tokens
 
-def generate_tree(tokens, breadth: int, depth: int, continuation: int):
-    print(f"Tree {breadth} {depth} {continuation}")
+def generate_tree(tokens, breadth: int, depth: int, continuation: int, path = "n"):
     result = []
     for i in range(breadth):
+        node_path = f"{path}_{i}"
         node = generate_nth(tokens, i)
-        print(f"  SubTree {i} {depth} {continuation} -> {node}")
+        print(f"  {path} -> {node}")
         if depth == 0:
             node["continuation"] = generate_sequence(tokens + [node["token"]], continuation)
-            node["continuation_text"] = llm.detokenize(node["continuation"])
+            node["continuation_text"] = llm.detokenize(node["continuation"]).decode("utf-8")
+            print(f"  {path} -> {node} -> {node['continuation_text']}")
         else:
-            node["children"] = generate_tree(tokens + [node["token"]], breadth, depth - 1, continuation)
+            node["children"] = generate_tree(tokens + [node["token"]], breadth, depth - 1, continuation, node_path)
         result.append(node)
     return result
 
-tree = generate_tree(tokens, 3, 1, 5)
+tree = generate_tree(tokens, 3, 2, 5)
 print(tree)
 
-def node_to_graphviz(node, nth, depth):
-    graphviz = f"  n{depth}_{nth} [label=\"{node['text']}\n[{node['token']}]\"];\n"
+def node_to_graphviz(node, nth, depth, path = "n"):
+    path = f"{path}_{nth}"
+    graphviz = f"  {path} [label=\"{node['text']}\n[{node['token']}]\"];\n"
     for n, child in enumerate(node["children"]):
-        graphviz += f"  n{depth}_{nth} -> {depth+1}_{n};\n"
-        graphviz += node_to_graphviz(child, n, depth+1)
+        child_path = f"{path}_{n}"
+        graphviz += f"  {path} -> {child_path};\n"
+        graphviz += node_to_graphviz(child, n, depth+1, path)
     if "continuation_text" in node:
-        graphviz += f"  n{depth}_{nth} -> \"{node['continuation_text']}\";\n"
+        graphviz += f"  {path} -> \"{node['continuation_text']}\";\n"
     return graphviz
 
 def tree_to_graphviz(prefix_tokens, tree):
@@ -88,9 +91,9 @@ def tree_to_graphviz(prefix_tokens, tree):
         rankdir=LR;
         node [shape=rectangle];
     """
-    prefix = llm.detokenize(prefix_tokens)
+    prefix = llm.detokenize(prefix_tokens).decode("utf-8")
     for n, node in enumerate(tree):
-        graphviz += f" \"{prefix}\" -> n0_{n};\n"
+        graphviz += f" \"{prefix}\" -> n_{n};\n"
         graphviz += node_to_graphviz(node, n, 0)
     graphviz += "}\n"
     return graphviz
