@@ -17,6 +17,7 @@ import numpy.typing as npt
 
 from llama_cpp._internals import _LlamaTokenDataArray
 
+import textwrap
 
 def debug(*args, **kwargs):
     print(*args, **kwargs, file=sys.stderr)
@@ -58,13 +59,6 @@ class TokenTree:
             self.tree,
         )
         self.state = "done"
-        # print(tree_to_graphviz(tokens, tree))
-
-    # prompt = (
-    #     "Q: Give a comma separated list of the planets in the solar system? A: ".encode(
-    #         "utf-8"
-    #     )
-    # )
 
     def generate_nth(self, tokens, nth):
         self.llm.n_tokens = len(tokens) - 1
@@ -76,8 +70,9 @@ class TokenTree:
         nth_token = token_data_array.candidates_data[0][nth][0]
         return {
             "n": nth,
+            "prefix_tokens": tokens,
             "token": nth_token,
-            "text": self.llm.detokenize([nth_token]).decode("utf-8"),
+            "text": self.llm.detokenize([nth_token]).decode("utf-8", "backslashreplace"),
             "children": [],
         }
 
@@ -104,7 +99,7 @@ class TokenTree:
                 )
                 node["continuation_text"] = self.llm.detokenize(
                     node["continuation"]
-                ).decode("utf-8")
+                ).decode("utf-8", "backslashreplace")
                 debug(f"  {path} -> {node} -> {node['continuation_text']}")
             else:
                 node["children"] = []
@@ -132,7 +127,15 @@ class TokenTree:
             node_continuation_text = (
                 node["continuation_text"].replace('"', '\\"').replace("\\", "\\\\")
             )
+            node_continuation_text = textwrap.fill(node_continuation_text, 40)
             graphviz += f'  {path}_continuation [label="{node_continuation_text}"];\n'
+
+            all_tokens = node["prefix_tokens"] + [node["token"]] + node["continuation"]
+            all_text = self.llm.detokenize(all_tokens).decode("utf-8", "backslashreplace").replace('"', '\\"').replace("\\", "\\\\")
+            all_text = textwrap.fill(all_text, 40)
+            graphviz += f'  {path}_continuation -> {path}_all [style=dashed];\n'
+            graphviz += f'  {path}_all [label="{all_text}" style=dashed];\n'
+
         return graphviz
 
     def tree_to_graphviz(self):
@@ -142,6 +145,8 @@ class TokenTree:
             node [shape=rectangle];
         """
         prefix = self.llm.detokenize(self.prompt_tokens).decode("utf-8")
+        prefix = prefix.replace('"', '\\"').replace("\\", "\\\\")
+        prefix = textwrap.fill(prefix, 40)
         for n, node in enumerate(self.tree):
             graphviz += f' "{prefix}" -> n_{n};\n'
             graphviz += self.node_to_graphviz(node, n, 0)
@@ -163,9 +168,9 @@ def index():
             <label for="breadth">Breadth:</label>
             <input type="text" name="breadth" value="2" size=5 />
             <label for="depth">Depth:</label>
-            <input type="text" name="depth" value="0" size=5 />
+            <input type="text" name="depth" value="1" size=5 />
             <label for="continuation">Continuation:</label>
-            <input type="text" name="continuation" value="3" size=5 />
+            <input type="text" name="continuation" value="10" size=5 />
             <input type="submit" value="Go!" />
         </form>
     """
@@ -176,15 +181,15 @@ global_tree = None
 
 def build_tree(prompt, breadth, depth, continuation):
     global global_tree
-    global_tree = TokenTree(prompt, breadth, depth, continuation)
+    global_tree = TokenTree(prompt, breadth, depth - 1, continuation)
     global_tree.run()
 
 
 @app.route("/start", methods=["POST"])
 def start():
-    breadth = int(request.form.get("breadth", 0))
-    depth = int(request.form.get("depth", 0))
-    continuation = int(request.form.get("continuation", 0))
+    breadth = int(request.form.get("breadth", 1))
+    depth = int(request.form.get("depth", 1))
+    continuation = int(request.form.get("continuation", 10))
     prompt = request.form.get(
         "prompt",
         "Q: Give a comma separated list of the planets in the solar system? A: ",
@@ -200,6 +205,7 @@ def start():
         Depth: {depth}<br/>
         Continuation: {continuation}<br/>
         Prompt: {prompt}<br/>
+        <button id="stop">Stop</button>
         """
         + """
         <div id="graphviz"></div>
@@ -222,7 +228,20 @@ def start():
                         // }
                     });
             }, 1000);
+            document.getElementById("stop").addEventListener("click", () => {
+                clearInterval(interval);
+            });
         </script>
+        <style>
+            #graphviz svg {
+                width: 90vw;
+                overflow: visible;
+            }
+            #graphviz svg .node polygon {
+              fill: white;
+              filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.5));
+            }
+        </style>
     """
     )
 
@@ -230,18 +249,12 @@ def start():
 @app.route("/current", methods=["GET"])
 def current():
     global global_tree
-    if global_tree is not None and global_tree.state != "init":
-        print(f"""global_tree: {global_tree.tree}""")
-        return global_tree.tree_to_graphviz()
-    # if global_tree is not None and global_tree.state == "running":
-    #     print(f"""global_tree: {global_tree.tree}""")
-    #     return global_tree.tree_to_graphviz()
-    # elif global_tree is not None and global_tree.state == "done":
-    #     return "done"
+    if global_tree is None:
+        return """digraph G { "loading" }"""
+    if global_tree.state == "init":
+        return """digraph G { "initializing" }"""
     else:
-        return """digraph G { "none yet" }"""
-    # tree = generate_tree(tokens, 3, 2, 5)
-    # return tree_to_graphviz(tokens, tree)
+        return global_tree.tree_to_graphviz()
 
 
 app.run(debug=True)
