@@ -205,6 +205,7 @@ def start():
         Depth: {depth}<br/>
         Continuation: {continuation}<br/>
         Prompt: {prompt}<br/>
+        State: <span id="state">loading</span><br/>
         <button id="stop">Stop</button>
         """
         + """
@@ -213,19 +214,22 @@ def start():
         <script src="https://unpkg.com/@viz-js/viz"></script>
 
         <script>
+            function renderGraphviz(dot) {
+                Viz.instance().then(viz => {
+                  document.getElementById("graphviz").innerHTML = ""
+                  document.getElementById("graphviz").appendChild(viz.renderSVGElement(dot));
+                });
+            }
+
             let interval = setInterval(() => {
                 fetch("/current")
-                    .then(response => response.text())
-                    .then(text => {
-                        // if(text == "done") {
-                            // clearInterval(interval);
-                        // } else {
-                            // document.getElementById("graphviz").innerHTML = text;
-                            Viz.instance().then(viz => {
-                              document.getElementById("graphviz").innerHTML = ""
-                              document.getElementById("graphviz").appendChild(viz.renderSVGElement(text));
-                            });
-                        // }
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById("state").innerText = data.state;
+                        renderGraphviz(data.dot);
+                        if(data.state == "done") {
+                            clearInterval(interval);
+                        }
                     });
             }, 1000);
             document.getElementById("stop").addEventListener("click", () => {
@@ -250,11 +254,30 @@ def start():
 def current():
     global global_tree
     if global_tree is None:
-        return """digraph G { "loading" }"""
-    if global_tree.state == "init":
-        return """digraph G { "initializing" }"""
+        return {
+            "state": "loading",
+            "dot": """digraph G { "loading" }"""
+        }
+    elif global_tree.state == "init":
+        return {
+            "state": "init",
+            "dot": """digraph G { "initializing" }"""
+        }
+    elif global_tree.state == "running":
+        return {
+            "state": "running",
+            "dot": global_tree.tree_to_graphviz()
+        }
+    elif global_tree.state == "done":
+        return {
+            "state": "done",
+            "dot": global_tree.tree_to_graphviz()
+        }
     else:
-        return global_tree.tree_to_graphviz()
+        return {
+            "state": "error",
+            "dot": """digraph G { "error" }"""
+        }
 
 
 app.run(debug=True)
