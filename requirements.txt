@@ -2,3 +2,5 @@ llama-cpp-python
 huggingface-hub
 ipython
 black
+flask
+flask[async]

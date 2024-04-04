@@ -17,8 +17,10 @@ import numpy.typing as npt
 
 from llama_cpp._internals import _LlamaTokenDataArray
 
+
 def debug(*args, **kwargs):
     print(*args, **kwargs, file=sys.stderr)
+
 
 class TokenTree:
     def __init__(self, prompt, breadth, depth, continuation):
@@ -47,16 +49,22 @@ class TokenTree:
         self.llm.reset()
         self.llm.eval(self.prompt_tokens)  # Seed the whole thing
         self.state = "running"
-        self.generate_tree(self.prompt_tokens, self.breadth, self.depth, self.continuation, "n", self.tree)
+        self.generate_tree(
+            self.prompt_tokens,
+            self.breadth,
+            self.depth,
+            self.continuation,
+            "n",
+            self.tree,
+        )
         self.state = "done"
         # print(tree_to_graphviz(tokens, tree))
 
-# prompt = (
-#     "Q: Give a comma separated list of the planets in the solar system? A: ".encode(
-#         "utf-8"
-#     )
-# )
-
+    # prompt = (
+    #     "Q: Give a comma separated list of the planets in the solar system? A: ".encode(
+    #         "utf-8"
+    #     )
+    # )
 
     def generate_nth(self, tokens, nth):
         self.llm.n_tokens = len(tokens) - 1
@@ -73,7 +81,6 @@ class TokenTree:
             "children": [],
         }
 
-
     def generate_sequence(self, tokens, length):
         local_tokens = tokens.copy()
         output_tokens = []
@@ -83,8 +90,9 @@ class TokenTree:
             output_tokens.append(token)
         return output_tokens
 
-
-    def generate_tree(self, tokens, breadth: int, depth: int, continuation: int, path, result):
+    def generate_tree(
+        self, tokens, breadth: int, depth: int, continuation: int, path, result
+    ):
         for i in range(breadth):
             node_path = f"{path}_{i}"
             node = self.generate_nth(tokens, i)
@@ -94,23 +102,26 @@ class TokenTree:
                 node["continuation"] = self.generate_sequence(
                     tokens + [node["token"]], continuation
                 )
-                node["continuation_text"] = self.llm.detokenize(node["continuation"]).decode(
-                    "utf-8"
-                )
+                node["continuation_text"] = self.llm.detokenize(
+                    node["continuation"]
+                ).decode("utf-8")
                 debug(f"  {path} -> {node} -> {node['continuation_text']}")
             else:
                 node["children"] = []
                 # node["children"] =
                 self.generate_tree(
-                    tokens + [node["token"]], breadth, depth - 1, continuation, node_path, node["children"]
+                    tokens + [node["token"]],
+                    breadth,
+                    depth - 1,
+                    continuation,
+                    node_path,
+                    node["children"],
                 )
         return result
 
-
-
     def node_to_graphviz(self, node, nth, depth, path="n"):
         path = f"{path}_{nth}"
-        node_text = node["text"].replace('"', '\\"').replace('\\', '\\\\')
+        node_text = node["text"].replace('"', '\\"').replace("\\", "\\\\")
         graphviz = f"  {path} [label=\"{node_text}\n[{node['token']}]\"];\n"
         for n, child in enumerate(node["children"]):
             child_path = f"{path}_{n}"
@@ -118,10 +129,11 @@ class TokenTree:
             graphviz += self.node_to_graphviz(child, n, depth + 1, path)
         if "continuation_text" in node:
             graphviz += f"  {path} -> {path}_continuation;\n"
-            node_continuation_text = node["continuation_text"].replace('"', '\\"').replace('\\', '\\\\')
-            graphviz += f"  {path}_continuation [label=\"{node_continuation_text}\"];\n"
+            node_continuation_text = (
+                node["continuation_text"].replace('"', '\\"').replace("\\", "\\\\")
+            )
+            graphviz += f'  {path}_continuation [label="{node_continuation_text}"];\n'
         return graphviz
-
 
     def tree_to_graphviz(self):
         graphviz = """
@@ -135,7 +147,6 @@ class TokenTree:
             graphviz += self.node_to_graphviz(node, n, 0)
         graphviz += "}\n"
         return graphviz
-
 
 
 app = flask.Flask(__name__)
@@ -159,11 +170,15 @@ def index():
         </form>
     """
 
+
 global_tree = None
+
+
 def build_tree(prompt, breadth, depth, continuation):
     global global_tree
     global_tree = TokenTree(prompt, breadth, depth, continuation)
     global_tree.run()
+
 
 @app.route("/start", methods=["POST"])
 def start():
@@ -175,7 +190,9 @@ def start():
         "Q: Give a comma separated list of the planets in the solar system? A: ",
     )
 
-    threading.Thread(target=build_tree, args=(prompt, breadth, depth, continuation)).start()
+    threading.Thread(
+        target=build_tree, args=(prompt, breadth, depth, continuation)
+    ).start()
 
     return (
         f"""
