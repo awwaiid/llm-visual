@@ -18,6 +18,7 @@ import numpy.typing as npt
 from llama_cpp._internals import _LlamaTokenDataArray
 
 import textwrap
+import html
 
 def debug(*args, **kwargs):
     print(*args, **kwargs, file=sys.stderr)
@@ -60,7 +61,12 @@ class TokenTree:
         )
         self.state = "done"
 
+    def stop(self):
+        self.state = "stopped"
+
     def generate_nth(self, tokens, nth):
+        if self.state == "stopped":
+            raise Exception('Aborting due to stop')
         self.llm.n_tokens = len(tokens) - 1
         self.llm.eval([tokens[-1]])
         logits = self.llm._scores[-1, :]
@@ -159,18 +165,27 @@ app = flask.Flask(__name__)
 
 @app.route("/", methods=["GET"])
 def index():
-    return """
+    if global_tree is not None:
+        global_tree.stop()
+    breadth = int(request.args.get("breadth", 2))
+    depth = int(request.args.get("depth", 1))
+    continuation = int(request.args.get("continuation", 10))
+    prompt = html.escape(request.args.get(
+        "prompt",
+        "Q: Give a comma separated list of the planets in the solar system? A: ",
+    ))
+    return f"""
         <form method="post" action="/start">
             <label for="prompt">Prompt:</label>
             <br/>
-            <textarea name="prompt" cols=80 rows=5>Q: Give a comma separated list of the planets in the solar system? A: </textarea>
+            <textarea name="prompt" cols=80 rows=5>{prompt}</textarea>
             <br/>
             <label for="breadth">Breadth:</label>
-            <input type="text" name="breadth" value="2" size=5 />
+            <input type="text" name="breadth" value="{breadth}" size=5 />
             <label for="depth">Depth:</label>
-            <input type="text" name="depth" value="1" size=5 />
+            <input type="text" name="depth" value="{depth}" size=5 />
             <label for="continuation">Continuation:</label>
-            <input type="text" name="continuation" value="10" size=5 />
+            <input type="text" name="continuation" value="{continuation}" size=5 />
             <input type="submit" value="Go!" />
         </form>
     """
@@ -195,6 +210,9 @@ def start():
         "Q: Give a comma separated list of the planets in the solar system? A: ",
     )
 
+    if global_tree is not None:
+        global_tree.stop()
+
     threading.Thread(
         target=build_tree, args=(prompt, breadth, depth, continuation)
     ).start()
@@ -207,6 +225,13 @@ def start():
         Prompt: {prompt}<br/>
         State: <span id="state">loading</span><br/>
         <button id="stop">Stop</button>
+        <form method="get" action="/">
+            <input type="submit" value="Restart" />
+            <input type="hidden" name="breadth" value="{breadth}" />
+            <input type="hidden" name="depth" value="{depth}" />
+            <input type="hidden" name="continuation" value="{continuation}" />
+            <input type="hidden" name="prompt" value="{prompt}" />
+        </form>
         """
         + """
         <div id="graphviz"></div>
@@ -221,19 +246,31 @@ def start():
                 });
             }
 
+            function stop() {
+                fetch("/stop")
+                    .then(response => response.text())
+                    .then(data => {
+                        console.log(data);
+                    });
+            }
+
+
             let interval = setInterval(() => {
                 fetch("/current")
                     .then(response => response.json())
                     .then(data => {
                         document.getElementById("state").innerText = data.state;
-                        renderGraphviz(data.dot);
-                        if(data.state == "done") {
+                        if(data.state == "running") {
+                            renderGraphviz(data.dot);
+                        } else if(data.state == "done") {
+                            renderGraphviz(data.dot);
                             clearInterval(interval);
                         }
                     });
             }, 1000);
             document.getElementById("stop").addEventListener("click", () => {
                 clearInterval(interval);
+                stop();
             });
         </script>
         <style>
@@ -249,6 +286,12 @@ def start():
     """
     )
 
+@app.route("/stop", methods=["GET"])
+def stop():
+    global global_tree
+    if global_tree is not None:
+        global_tree.stop()
+    return "stopped"
 
 @app.route("/current", methods=["GET"])
 def current():
