@@ -1,8 +1,11 @@
-Explorations on visualizing LLM workings.
+# Explorations on visualizing LLM workings.
 
-Initially I'm doing this with a localLLM, but it is already getting annoyingly slow.
+> Demonstrates token generation by showing a tree of possible top-choice tokens at each step. Presented as a web interface.
 
-WIP Example Outputs
+## WIP Example Outputs:
 
 ![Example 1](img/example-1.png)
 ![Example 2](img/example-2.png)
+![Example 3](img/example-3.png)
+![Example 4](img/example-4.gif)
+
