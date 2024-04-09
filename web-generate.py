@@ -175,6 +175,8 @@ def index():
         "Q: Give a comma separated list of the planets in the solar system? A: ",
     ))
     return f"""
+        <h1>Generate a tree of tokens!</h1>
+        <p>Enter a prompt. We'll explore the tokens that get generated from that point -- breadth is how many alternative tokens to make and depth is how many levels to go down. Then continuation will generate a bunch of tokens from that point. This uses the top-ranked tokens.</p>
         <form method="post" action="/start">
             <label for="prompt">Prompt:</label>
             <br/>
@@ -219,13 +221,13 @@ def start():
 
     return (
         f"""
-        Breadth: {breadth}<br/>
-        Depth: {depth}<br/>
-        Continuation: {continuation}<br/>
         Prompt: {prompt}<br/>
+        Breadth: {breadth},
+        Depth: {depth},
+        Continuation: {continuation}<br>
         State: <span id="state">loading</span><br/>
         <button id="stop">Stop</button>
-        <form method="get" action="/">
+        <form method="get" action="/" style="display: inline">
             <input type="submit" value="Restart" />
             <input type="hidden" name="breadth" value="{breadth}" />
             <input type="hidden" name="depth" value="{depth}" />
@@ -262,7 +264,7 @@ def start():
                         document.getElementById("state").innerText = data.state;
                         if(data.state == "running") {
                             renderGraphviz(data.dot);
-                        } else if(data.state == "done") {
+                        } else if(data.state == "done" || data.state == "error" || data.state == "stopped") {
                             renderGraphviz(data.dot);
                             clearInterval(interval);
                         }
