@@ -39,8 +39,11 @@ class TokenTree:
 
     def run(self):
         self.llm = Llama.from_pretrained(
-            repo_id="TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
-            filename="*Q8_0.gguf",
+            # repo_id="TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
+            # filename="*Q8_0.gguf",
+            repo_id="bartowski/Meta-Llama-3-8B-Instruct-GGUF",
+            filename="*Q6_K.gguf",
+            # filename="*Q4_K_M.gguf",
             verbose=False,
         )
         self.ctx_main = self.llm._ctx
